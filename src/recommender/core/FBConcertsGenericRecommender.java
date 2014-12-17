@@ -14,19 +14,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Random;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.Scanner;
-import java.util.Set;
 
 import org.apache.mahout.cf.taste.common.TasteException;
 import org.apache.mahout.cf.taste.impl.common.FastByIDMap;
 import org.apache.mahout.cf.taste.impl.model.GenericDataModel;
-import org.apache.mahout.cf.taste.impl.model.GenericItemPreferenceArray;
 import org.apache.mahout.cf.taste.impl.model.GenericPreference;
 import org.apache.mahout.cf.taste.impl.model.GenericUserPreferenceArray;
 import org.apache.mahout.cf.taste.impl.model.file.FileDataModel;
-import org.apache.mahout.cf.taste.impl.neighborhood.NearestNUserNeighborhood;
 import org.apache.mahout.cf.taste.impl.recommender.GenericItemBasedRecommender;
 import org.apache.mahout.cf.taste.impl.similarity.LogLikelihoodSimilarity;
 import org.apache.mahout.cf.taste.model.DataModel;
@@ -44,7 +41,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 
 import recommender.utils.Defines;
 
-public class FBConcertsRecommender {
+public class FBConcertsGenericRecommender {
 	/**
 	 * getTourDates; pick closest location
 	 * 
@@ -54,17 +51,15 @@ public class FBConcertsRecommender {
 	private String itemMappingsFile = RESOURCE_PREFIX + "itemMappings";
 	private final Integer NO_NEIGHBORS = 1;
 	private DataModel dataModel 					= null;
-	private FastByIDMap<PreferenceArray> userData 	= new FastByIDMap<PreferenceArray>();
+	private FastByIDMap<PreferenceArray> userData 	= null;
 	private HashMap<String, Long> userMappings = new HashMap<String, Long>();
 	private HashMap<String, Long> itemMappings = new HashMap<String, Long>();
 	private UserSimilarity userSimilarity = null;
 	private ItemSimilarity itemSimilarity = null;
-	private Random rand = new Random();
+	private Random rand;
 	
-	public FBConcertsRecommender() {
-		this.initRecommender(this.databaseFile);
-	}
-	public FBConcertsRecommender(String file) {
+	public FBConcertsGenericRecommender() {
+		this.rand = new Random();
 		this.initRecommender(this.databaseFile);
 	}
 	/**
@@ -243,7 +238,6 @@ public class FBConcertsRecommender {
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-	
 	}
 	/**
 	 * Initialize the recommender
@@ -260,24 +254,8 @@ public class FBConcertsRecommender {
 	public void refreshModel() {
 		readModelFromFile();
 	}
-	private Long facebookIDToLocal(String facebookID, boolean isUser) {
-		if (isUser)
-			return userMappings.get(facebookID);
-		return itemMappings.get(facebookID);
-		
-	}
-	private String localIDToFacebook(Long localID, boolean isUser) {
-		Set<Entry<String, Long>> tempSet;
-		if (isUser) {
-			tempSet = userMappings.entrySet();
-		} else {
-			tempSet = itemMappings.entrySet();
-			for (Entry<String, Long> entry : tempSet) {
-				if (entry.getValue().equals(localID))
-						return entry.getKey();
-			}
-		}
-	return null;
+	private Long facebookIDToLocal(String facebookID) {
+		return userMappings.get(facebookID);
 	}
 	public void initRecommender() {
 		dataModel = new GenericDataModel(this.userData);
@@ -303,28 +281,20 @@ public class FBConcertsRecommender {
 	 * @throws Exception 
 	 */
 	public Long addUserInfo(String userJson) throws Exception {
-		JsonNode 	  	 rootNode, type, userNode, arrayNode, rootArray, params;
+		JsonNode 	  	 rootNode, type, userNode, arrayNode, params, json;
 		ObjectMapper 	 jsonObj	= new ObjectMapper();
 		List<Preference> userPrefs	= new ArrayList<Preference>();
 		Long localID = new Long(-1);
-		Long localItemID;
 		Float valueFactor;
 		try {
 			
 //			"user_id:123,type:likes,params:link,name, json:json"
 			rootNode = jsonObj.readTree(userJson);
 			userNode = rootNode.path("id");
-			localID  = facebookIDToLocal(userNode.asText(), true);
-			if (localID == null) {
-				do {
-					localID = rand.nextLong();
-					if (localID < 0)
-						localID *= -1;
-				} while (localID != null && userMappings.containsValue(localID));
-				this.userMappings.put(userNode.asText(), localID);
-			}
+			localID  = facebookIDToLocal(userNode.asText());
+			
 			type = rootNode.path("type");
-//			if(rootArray.isArray())
+			
 			System.out.println("type: " + type);
 			if (! FbDataType.contains(type.asInt())){
 				System.err.println("Not supported");
@@ -339,66 +309,54 @@ public class FBConcertsRecommender {
 			
 			params = rootNode.path("params");
 			
+			
 			arrayNode = rootNode.path("likes");
 			if (this.userMappings.containsKey(userNode.asText())) {
 				updateUserInfo(localID, arrayNode);
 				return localID;
 			}
-			this.userMappings.put(userNode.asText(), localID);
 			if (!arrayNode.isArray())
 				throw new Exception("Null preference array!");
-			
+			do {
+				localID = rand.nextLong();
+			} while (this.userMappings.containsValue(localID));
 			for (JsonNode itemNode : arrayNode) {
-				localItemID = facebookIDToLocal(itemNode.asText(), false);
-				if (localItemID == null) {
-					do {
-						localItemID = rand.nextLong();
-						if (localItemID < 0)
-							localItemID *= -1;
-					} while (itemMappings.containsValue(localItemID));
-					this.itemMappings.put(itemNode.asText(), localItemID);
-				}
-				
 				userPrefs.add(new GenericPreference(
-									localID, localItemID, valueFactor));
+									localID, itemNode.asLong(),	(float) 1.0));
 			}
-			this.userData = GenericDataModel.toDataMap(this.dataModel);
-			this.userData.put(localID, new GenericItemPreferenceArray(userPrefs));
-			refreshModel();
+			this.userData = new FastByIDMap<PreferenceArray>();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 		return localID;
 	}
 	public void updateUserInfo(Long localID, JsonNode userNode) throws Exception {
-		Long localItemID;
-		
-		ArrayList<GenericPreference> newPrefs = new ArrayList<GenericPreference>();
 		if (!userNode.isArray())
 			throw new Exception("Null preference array!");
-		System.out.println("local ID " + localID);
 		for (JsonNode itemNode : userNode) {
 			String itemID = itemNode.asText();
-			do {
-				localItemID = rand.nextLong();
-				if (localItemID < 0)
-					localItemID *= -1;
-			} while (itemMappings.containsValue(localItemID));
-			this.itemMappings.put(itemNode.asText(), localItemID);
-			
-			if (this.dataModel.getPreferenceValue(localID, localItemID) != null) {
-				this.dataModel.removePreference(localID, localItemID);
+			Long localItemId = facebookIDToLocal(facebookID);
+					
+			if (this.dataModel.getPreferenceValue(localID, itemID) != null) {
+				this.dataModel.removePreference(localID, itemID);
+				this.dataModel.setPreference(localID, itemID, (float)itemNode.asDouble());
+				
+				saveState();
+			} else {
+				FastByIDMap<PreferenceArray> userData = GenericDataModel.toDataMap(this.dataModel);
+				GenericUserPreferenceArray 	 prefs 	  = (GenericUserPreferenceArray) userData.get(localID);
+				ArrayList<GenericPreference> newPrefs = new ArrayList<GenericPreference>();
+				
+				for (Iterator<Preference> it = prefs.iterator(); it.hasNext();) {
+					newPrefs.add((GenericPreference) it.next());
+				}
+				do {
+					localItemID = rand.nextLong();
+				} while (this.userMappings.containsValue(localID));
+				newPrefs.add(new GenericPreference(localID, itemID, (float)itemNode.asDouble()));
+				writeModelToFile(userData, this.databaseFile);
 			}
-			newPrefs.add(new GenericPreference(localID, localItemID, (float)itemNode.asDouble()));
 		}
-		FastByIDMap<PreferenceArray> userData = GenericDataModel.toDataMap(this.dataModel);
-		GenericUserPreferenceArray 	 prefs 	  = (GenericUserPreferenceArray) userData.get(localID);
-		
-		for (Iterator<Preference> it = prefs.iterator(); it.hasNext();) {
-			newPrefs.add((GenericPreference) it.next());
-		}
-		writeModelToFile(userData, this.databaseFile);
-		this.readModelFromFile();
 	}
 	
 	/**
@@ -443,8 +401,8 @@ public class FBConcertsRecommender {
 			jsonGenerator.writeStartArray();
 			
 			for (RecommendedItem item : recommendations) {
-				jsonGenerator.writeNumber(localIDToFacebook(item.getItemID(), false));
-				System.out.println("Recommended for user [" + userID + "]: " + localIDToFacebook(item.getItemID(), false));
+				jsonGenerator.writeNumber(item.getItemID());
+				System.out.println("Recommended for user [" + userID + "]: " + item.getItemID());
 			}
 			jsonGenerator.writeEndArray();
 			jsonGenerator.writeEndObject();

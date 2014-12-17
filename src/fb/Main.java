@@ -30,7 +30,7 @@ import com.restfb.types.User;
 public class Main {
 	private FacebookClient fbClient = null;
 	private FacebookClient publicFbClient = null;
-	private final String MY_APP_SECRET = null;
+	private final String MY_APP_SECRET = "dd987ca8593b735729a0e0b6093ed52a";
 //	String accessToken = null;
 	String accessToken = "830b2777ccb28dd490aaf149b30c3fcc";
 //	PrintWriter out = new PrintWriter(System.out);
@@ -84,11 +84,11 @@ public class Main {
 	  void fetchObject() {
 	    out.println("* Fetching single objects *");
 
-	    User user = fbClient.fetchObject("me", User.class);
-	    Page page = fbClient.fetchObject("cocacola", Page.class);
+//	    User user = fbClient.fetchObject("me", User.class);
+	    Page page = publicFbClient.fetchObject("77696833002", Page.class);
 
-	    out.println("User name: " + user.getName());
-	    out.println("Page likes: " + page.getLikes());
+//	    out.println("User name: " + user.getName());
+	    out.println("Page likes: " + page.getType() + " " + page.getCategory());
 	  }
 
 	  void fetchObjectsAsJsonObject() {

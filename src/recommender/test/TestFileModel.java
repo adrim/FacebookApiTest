@@ -20,6 +20,12 @@ import recommender.core.FBConcertsRecommender;
 public class TestFileModel implements TestModelInterface {
 	FBConcertsRecommender fileRecommender;
 
+	public String user1 = "{\n\"type\":1,\n\"id\":\"688844_5220485\",\n"+
+						  "'params':{'id':'55444w473','name':'my name', 'category':'band'},"+
+						  "'json':['id111111', 'id222222','id33333']}";
+	public String user2 = "{\n\"type\":1,\n\"id\":\"688844_5220485\",\n"+
+			  "'params':{'id':'55444w473','name':'my name', 'category':'band'},"+
+			  "'json':['id111111','id33333']}";
 	public TestFileModel() {
 		fileRecommender = new FBConcertsRecommender();
 	}
@@ -43,6 +49,7 @@ public class TestFileModel implements TestModelInterface {
 		userID = new Long(4);
 		recommendations = fileModelTest.recommend(testJSON);
 		System.out.println(recommendations);
+		
 		
 	}
 
