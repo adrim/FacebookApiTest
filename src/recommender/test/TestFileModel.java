@@ -38,17 +38,17 @@ public class TestFileModel implements TestModelInterface {
 		System.out.println("______________\n");
 		
 		Long userID = new Long(2);
-		String recommendations = fileModelTest.recommend(userID);
+		String recommendations = fileModelTest.recommend(testJSON);
 		System.out.println(recommendations);
 		userID = new Long(4);
-		recommendations = fileModelTest.recommend(userID);
+		recommendations = fileModelTest.recommend(testJSON);
 		System.out.println(recommendations);
 		
 	}
 
 	@Override
-	public String recommend(Long userID) {
-		return this.fileRecommender.recommend(userID);
+	public String recommend(String json) {
+		return this.fileRecommender.recommend(json);
 	}
 	
 	public void testReadingJSON(String json) {

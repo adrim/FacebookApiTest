@@ -48,11 +48,12 @@ public class FBConcertsRecommender {
 	 */
 	private String databaseFile		= RESOURCE_PREFIX + "userLikes";
 	private String userMappingsFile = RESOURCE_PREFIX + "userMappings";
+	private String itemMappingsFile = RESOURCE_PREFIX + "itemMappings";
 	private final Integer NO_NEIGHBORS = 1;
 	private DataModel dataModel 					= null;
 	private FastByIDMap<PreferenceArray> userData 	= null;
-	private String file = "";
 	private HashMap<String, Long> userMappings = new HashMap<String, Long>();
+	private HashMap<String, Long> itemMappings = new HashMap<String, Long>();
 	private UserSimilarity userSimilarity = null;
 	private ItemSimilarity itemSimilarity = null;
 	
@@ -157,6 +158,21 @@ public class FBConcertsRecommender {
 		}
 	}
 	/**
+	 * Read the mapping from Facebook id to local id
+	 * Reason for new id: the recommender uses Long IDs, not String
+	 */
+	public void readItemMappingsFromFile() {
+		if (Files.notExists(Paths.get(this.itemMappingsFile),
+							LinkOption.NOFOLLOW_LINKS)) {
+			return;
+		}
+		
+		Scanner sc = new Scanner(this.itemMappingsFile);
+		while (sc.hasNext()) {
+			this.itemMappings.put(sc.next(), sc.nextLong());
+		}
+	}
+	/**
 	 * Write Data Model to file to be uploaded when the server goes up
 	 */
 	public void writeModelToFile() {
@@ -210,6 +226,17 @@ public class FBConcertsRecommender {
 			e.printStackTrace();
 		}
 	}
+	public void writeItemMappingsToFile() {
+		try {
+			PrintWriter pw = new PrintWriter(itemMappingsFile);
+			for (Entry<String, Long> mapping : this.itemMappings.entrySet()) {
+				pw.println(mapping.toString());
+			}
+			pw.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+	}
 	/**
 	 * Initialize the recommender
 	 * @param file
@@ -231,6 +258,16 @@ public class FBConcertsRecommender {
 	public void initRecommender() {
 		dataModel = new GenericDataModel(this.userData);
 	}
+	public int getValuesSum() {
+		Integer sum = 0;
+		for (FbDataType item : FbDataType.values())
+			sum += item.getValue();
+		return sum;
+	}
+	public int getMaxValue() {
+		FbDataType[] vals = FbDataType.values();
+		return vals[vals.length-1].getValue();
+	}
 	/**
 	 * type:
 	 * <ul>
@@ -241,27 +278,40 @@ public class FBConcertsRecommender {
 	 * @param userJson
 	 * @throws Exception 
 	 */
-	public void addUserInfo(String userJson) throws Exception {
-		JsonNode 	  	 rootNode, type, userNode, arrayNode;
+	public Long addUserInfo(String userJson) throws Exception {
+		JsonNode 	  	 rootNode, type, userNode, arrayNode, params, json;
 		ObjectMapper 	 jsonObj	= new ObjectMapper();
 		List<Preference> userPrefs	= new ArrayList<Preference>();
-		Long localID;
+		Long localID = new Long(-1);
+		Float valueFactor;
 		try {
+			
+//			"user_id:123,type:likes,params:link,name, json:json"
 			rootNode = jsonObj.readTree(userJson);
+			userNode = rootNode.path("id");
+			localID  = facebookIDToLocal(userNode.asText());
+			
 			type = rootNode.path("type");
 			
 			System.out.println("type: " + type);
-			if (type.asInt() != 1) {
+			if (! FbDataType.contains(type.asInt())){
 				System.err.println("Not supported");
-				return;
+				return new Long(-1);
 			}
-			userNode = rootNode.path("id");
-			localID  = facebookIDToLocal(userNode.asText());
+			
+			/**
+			 * Type with higher values are more important for the
+			 * recommendation system
+			 */
+			valueFactor = (float) type.asInt() / getMaxValue();
+			
+			params = rootNode.path("params");
+			
 			
 			arrayNode = rootNode.path("likes");
 			if (this.userMappings.containsKey(userNode.asText())) {
 				updateUserInfo(localID, arrayNode);
-				return;
+				return localID;
 			}
 			if (!arrayNode.isArray())
 				throw new Exception("Null preference array!");
@@ -274,6 +324,7 @@ public class FBConcertsRecommender {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		return localID;
 	}
 	public void updateUserInfo(Long localID, JsonNode userNode) throws Exception {
 		if (!userNode.isArray())
@@ -323,8 +374,6 @@ public class FBConcertsRecommender {
 //			recommender  = new GenericUserBasedRecommender(dataModel, neighborhood, sim);
 			recommendations = recommender.recommend(userID, maxItems);
 			
-			
-			
 		} catch (TasteException e1) {
 			System.err.println("Recommender system fault!");
 			e1.printStackTrace();
@@ -360,7 +409,16 @@ public class FBConcertsRecommender {
 		
 		return json;
 	}
-	public String recommend(Long user) {
-		return recommend(user, Defines.DEFAULT_MAXIMUM_RECOMMENDATIONS);
+	public String recommend(String userJson) {
+		Long userID;
+		try {
+			userID = addUserInfo(userJson);
+			return recommend(userID, Defines.DEFAULT_MAXIMUM_RECOMMENDATIONS);
+		} catch (Exception e) {
+			System.err.println("[Recommender] FATAL ERROR -- Will Exit");
+			e.printStackTrace();
+			System.exit(0);
+		}
+		return null;
 	}
 }
