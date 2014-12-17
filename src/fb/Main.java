@@ -32,7 +32,7 @@ public class Main {
 	private FacebookClient publicFbClient = null;
 	private final String MY_APP_SECRET = null;
 //	String accessToken = null;
-	String accessToken = "769034396515940";
+	String accessToken = "830b2777ccb28dd490aaf149b30c3fcc";
 //	PrintWriter out = new PrintWriter(System.out);
 	PrintStream out = System.out;
 	
@@ -84,7 +84,7 @@ public class Main {
 	  void fetchObject() {
 	    out.println("* Fetching single objects *");
 
-	    User user = fbClient.fetchObject("mihaelaalexandra.neagu", User.class);
+	    User user = fbClient.fetchObject("me", User.class);
 	    Page page = fbClient.fetchObject("cocacola", Page.class);
 
 	    out.println("User name: " + user.getName());
