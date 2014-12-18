@@ -300,18 +300,26 @@ public class FBConcertsRecommender {
 	 * </ul>
 	 * 		
 	 * @param userJson
+	 * 		{"id":<user_id>,
+	 * 		 "params":["type", "link", "ids"],
+	 * 		 "json":{
+	 * 				"type":<number> -- should be found in FbDataType
+	 * 				"link":link, if it's a youtube video
+	 * 				"id": facebook id of the post
+	 * 		        }
+	 *		}  
 	 * @throws Exception 
 	 */
 	public Long addUserInfo(String userJson) throws Exception {
 		JsonNode 	  	 rootNode, type, userNode, arrayNode, rootArray, params;
 		ObjectMapper 	 jsonObj	= new ObjectMapper();
 		List<Preference> userPrefs	= new ArrayList<Preference>();
+		ArrayList<String> paramList = new ArrayList<String>();
+		
 		Long localID = new Long(-1);
 		Long localItemID;
 		Float valueFactor;
 		try {
-			
-//			"user_id:123,type:likes,params:link,name, json:json"
 			rootNode = jsonObj.readTree(userJson);
 			userNode = rootNode.path("id");
 			localID  = facebookIDToLocal(userNode.asText(), true);
